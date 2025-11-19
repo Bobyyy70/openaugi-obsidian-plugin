@@ -1,4 +1,5 @@
 import { TranscriptResponse, DistillResponse, PublishResponse } from '../types/transcript';
+import { ModelProvider } from '../types/settings';
 
 /**
  * A simple tokeinzer to estimate the number of tokens
@@ -11,15 +12,50 @@ function estimateTokens(text: string): number {
 }
 
 /**
- * Service for handling OpenAI API calls
+ * Service for handling AI API calls (OpenAI, Ollama, and compatible endpoints)
  */
 export class OpenAIService {
   private apiKey: string;
   private model: string;
+  private provider: ModelProvider;
+  private baseUrl: string;
 
-  constructor(apiKey: string, model: string) {
+  constructor(apiKey: string, model: string, provider: ModelProvider = 'openai', customBaseUrl?: string) {
     this.apiKey = apiKey;
     this.model = model;
+    this.provider = provider;
+    this.baseUrl = this.getBaseUrl(provider, customBaseUrl);
+  }
+
+  /**
+   * Get the appropriate base URL based on the provider
+   */
+  private getBaseUrl(provider: ModelProvider, customBaseUrl?: string): string {
+    if (customBaseUrl && customBaseUrl.trim()) {
+      // Remove trailing slash if present
+      return customBaseUrl.trim().replace(/\/$/, '');
+    }
+
+    switch (provider) {
+      case 'openai':
+        return 'https://api.openai.com/v1';
+      case 'ollama':
+        return 'http://localhost:11434';
+      case 'custom':
+        return customBaseUrl || 'http://localhost:1234/v1';
+      default:
+        return 'https://api.openai.com/v1';
+    }
+  }
+
+  /**
+   * Get the chat completions endpoint based on the provider
+   */
+  private getChatCompletionsEndpoint(): string {
+    if (this.provider === 'ollama') {
+      return `${this.baseUrl}/v1/chat/completions`;
+    }
+    return `${this.baseUrl}/chat/completions`;
   }
 
   /**
@@ -113,95 +149,137 @@ export class OpenAIService {
   }
 
   /**
-   * Call the OpenAI API to parse a transcript
+   * Get request headers based on provider
+   */
+  private getHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+
+    // Add authorization if API key is provided
+    if (this.apiKey && this.apiKey.trim()) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    return headers;
+  }
+
+  /**
+   * Check if the provider supports structured outputs
+   */
+  private supportsStructuredOutput(): boolean {
+    // Only OpenAI with certain models supports json_schema
+    return this.provider === 'openai';
+  }
+
+  /**
+   * Call the AI API to parse a transcript
    * @param content The transcript content
    * @returns Parsed transcript data
    */
   async parseTranscript(content: string): Promise<TranscriptResponse> {
-    if (!this.apiKey) {
-      throw new Error('OpenAI API key not set');
+    // Only require API key for non-local providers
+    if (this.provider !== 'ollama' && !this.apiKey) {
+      throw new Error('API key not set');
     }
 
     const prompt = this.getPrompt(content);
-    
+    const endpoint = this.getChatCompletionsEndpoint();
+
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: [{ role: 'user', content: prompt }],
-          max_completion_tokens: 32768,
-          response_format: {
-            type: "json_schema",
-            json_schema: {
-              name: "transcript_parser",
-              schema: {
-                type: "object",
-                properties: {
-                  summary: {
-                    type: "string",
-                    description: "Short 1–3 sentence summary of the transcript (no commands included), backlinks to atomic notes should be included."
-                  },
-                  notes: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        title: {
-                          type: "string",
-                          description: "Title of the atomic note"
-                        },
-                        content: {
-                          type: "string",
-                          description: "Markdown-formatted, self-contained idea with backlinks if relevant"
-                        }
+      const requestBody: any = {
+        model: this.model,
+        messages: [{ role: 'user', content: prompt }]
+      };
+
+      // Add max_completion_tokens for OpenAI
+      if (this.provider === 'openai') {
+        requestBody.max_completion_tokens = 32768;
+      }
+
+      // Use structured output for OpenAI, JSON mode for others
+      if (this.supportsStructuredOutput()) {
+        requestBody.response_format = {
+          type: "json_schema",
+          json_schema: {
+            name: "transcript_parser",
+            schema: {
+              type: "object",
+              properties: {
+                summary: {
+                  type: "string",
+                  description: "Short 1–3 sentence summary of the transcript (no commands included), backlinks to atomic notes should be included."
+                },
+                notes: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      title: {
+                        type: "string",
+                        description: "Title of the atomic note"
                       },
-                      required: ["title", "content"],
-                      additionalProperties: false
-                    }
-                  },
-                  tasks: {
-                    type: "array",
-                    items: {
-                      type: "string",
-                      description: "Markdown-formatted task with checkbox"
-                    }
+                      content: {
+                        type: "string",
+                        description: "Markdown-formatted, self-contained idea with backlinks if relevant"
+                      }
+                    },
+                    required: ["title", "content"],
+                    additionalProperties: false
                   }
                 },
-                required: ["summary", "notes", "tasks"],
-                additionalProperties: false
+                tasks: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    description: "Markdown-formatted task with checkbox"
+                  }
+                }
               },
-              strict: true
+              required: ["summary", "notes", "tasks"],
+              additionalProperties: false
             },
+            strict: true
           }
-        })
+        };
+      } else {
+        // For Ollama and other providers, request JSON format and add schema to prompt
+        requestBody.response_format = { type: "json_object" };
+        requestBody.messages[0].content += `\n\nYou MUST respond with valid JSON matching this schema:
+{
+  "summary": "string - Short 1–3 sentence summary",
+  "notes": [{"title": "string", "content": "string"}],
+  "tasks": ["string - task with checkbox"]
+}`;
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`OpenAI API error: ${response.status} ${errorData.error?.message || response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`API error: ${response.status} ${errorData.error?.message || response.statusText}`);
       }
 
       const responseData = await response.json();
       const structuredData = responseData.choices[0].message.content;
-      
-      // Check for API refusal
+
+      // Check for API refusal (OpenAI specific)
       if (responseData.choices[0].message.refusal) {
         throw new Error(`API refusal: ${responseData.choices[0].message.refusal}`);
       }
-      
+
       // Parse the JSON
-      const parsedData: TranscriptResponse = typeof structuredData === 'string' 
-        ? JSON.parse(structuredData) 
+      const parsedData: TranscriptResponse = typeof structuredData === 'string'
+        ? JSON.parse(structuredData)
         : structuredData;
-        
+
       return parsedData;
     } catch (error) {
-      console.error('Error calling OpenAI API:', error);
+      console.error('Error calling AI API:', error);
       throw error;
     }
   }
@@ -264,99 +342,117 @@ export class OpenAIService {
   }
 
   /**
-   * Call the OpenAI API to distill content from linked notes
+   * Call the AI API to distill content from linked notes
    * @param content The aggregated content from linked notes
    * @param customPrompt Optional custom prompt to replace the default instructions
    * @returns Distilled content data
    */
   async distillContent(content: string, customPrompt?: string): Promise<DistillResponse> {
-    if (!this.apiKey) {
-      throw new Error('OpenAI API key not set');
+    // Only require API key for non-local providers
+    if (this.provider !== 'ollama' && !this.apiKey) {
+      throw new Error('API key not set');
     }
 
     const prompt = this.getDistillPrompt(content, customPrompt);
-    
+    const endpoint = this.getChatCompletionsEndpoint();
+
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: [{ role: 'user', content: prompt }],
-          max_completion_tokens: 32768,
-          response_format: {
-            type: "json_schema",
-            json_schema: {
-              name: "distill_content",
-              schema: {
-                type: "object",
-                properties: {
-                  summary: {
-                    type: "string",
-                    description: "Concise summary that synthesizes the key concepts from all notes, with backlinks to atomic notes."
-                  },
-                  notes: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        title: {
-                          type: "string",
-                          description: "Title of the atomic note"
-                        },
-                        content: {
-                          type: "string",
-                          description: "Markdown-formatted, self-contained idea with backlinks if relevant"
-                        }
+      const requestBody: any = {
+        model: this.model,
+        messages: [{ role: 'user', content: prompt }]
+      };
+
+      // Add max_completion_tokens for OpenAI
+      if (this.provider === 'openai') {
+        requestBody.max_completion_tokens = 32768;
+      }
+
+      // Use structured output for OpenAI, JSON mode for others
+      if (this.supportsStructuredOutput()) {
+        requestBody.response_format = {
+          type: "json_schema",
+          json_schema: {
+            name: "distill_content",
+            schema: {
+              type: "object",
+              properties: {
+                summary: {
+                  type: "string",
+                  description: "Concise summary that synthesizes the key concepts from all notes, with backlinks to atomic notes."
+                },
+                notes: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      title: {
+                        type: "string",
+                        description: "Title of the atomic note"
                       },
-                      required: ["title", "content"],
-                      additionalProperties: false
-                    }
-                  },
-                  tasks: {
-                    type: "array",
-                    items: {
-                      type: "string",
-                      description: "Markdown-formatted task with checkbox"
-                    }
+                      content: {
+                        type: "string",
+                        description: "Markdown-formatted, self-contained idea with backlinks if relevant"
+                      }
+                    },
+                    required: ["title", "content"],
+                    additionalProperties: false
                   }
                 },
-                required: ["summary", "notes", "tasks"],
-                additionalProperties: false
+                tasks: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    description: "Markdown-formatted task with checkbox"
+                  }
+                }
               },
-              strict: true
+              required: ["summary", "notes", "tasks"],
+              additionalProperties: false
             },
+            strict: true
           }
-        })
+        };
+      } else {
+        // For Ollama and other providers, request JSON format and add schema to prompt
+        requestBody.response_format = { type: "json_object" };
+        requestBody.messages[0].content += `\n\nYou MUST respond with valid JSON matching this schema:
+{
+  "summary": "string - Concise summary",
+  "notes": [{"title": "string", "content": "string"}],
+  "tasks": ["string - task with checkbox"]
+}`;
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`OpenAI API error: ${response.status} ${errorData.error?.message || response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`API error: ${response.status} ${errorData.error?.message || response.statusText}`);
       }
 
       const responseData = await response.json();
       const structuredData = responseData.choices[0].message.content;
-      
-      // Check for API refusal
+
+      // Check for API refusal (OpenAI specific)
       if (responseData.choices[0].message.refusal) {
         throw new Error(`API refusal: ${responseData.choices[0].message.refusal}`);
       }
-      
+
       // Parse the JSON
-      const parsedData: DistillResponse = typeof structuredData === 'string' 
-        ? JSON.parse(structuredData) 
+      const parsedData: DistillResponse = typeof structuredData === 'string'
+        ? JSON.parse(structuredData)
         : structuredData;
-        
+
       // Initialize sourceNotes as empty array (will be populated by DistillService)
       parsedData.sourceNotes = [];
-        
+
       return parsedData;
     } catch (error) {
-      console.error('Error calling OpenAI API:', error);
+      console.error('Error calling AI API:', error);
       throw error;
     }
   }
@@ -430,40 +526,45 @@ Return a single markdown blog post, ready to publish.`;
   }
 
   /**
-   * Call the OpenAI API to publish content as a single blog post
+   * Call the AI API to publish content as a single blog post
    * @param content The aggregated content from notes
    * @param customPrompt Optional custom prompt to replace the default
    * @returns Published content as plain markdown
    */
   async publishContent(content: string, customPrompt?: string): Promise<string> {
-    if (!this.apiKey) {
-      throw new Error('OpenAI API key not set');
+    // Only require API key for non-local providers
+    if (this.provider !== 'ollama' && !this.apiKey) {
+      throw new Error('API key not set');
     }
 
     const prompt = this.getPublishPrompt(content, customPrompt);
+    const endpoint = this.getChatCompletionsEndpoint();
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const requestBody: any = {
+        model: this.model,
+        messages: [{ role: 'user', content: prompt }]
+      };
+
+      // Add max_completion_tokens for OpenAI
+      if (this.provider === 'openai') {
+        requestBody.max_completion_tokens = 32768;
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: [{ role: 'user', content: prompt }],
-          max_completion_tokens: 32768
-        })
+        headers: this.getHeaders(),
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`OpenAI API error: ${response.status} ${errorData.error?.message || response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`API error: ${response.status} ${errorData.error?.message || response.statusText}`);
       }
 
       const responseData = await response.json();
 
-      // Check for API refusal
+      // Check for API refusal (OpenAI specific)
       if (responseData.choices[0].message.refusal) {
         throw new Error(`API refusal: ${responseData.choices[0].message.refusal}`);
       }
@@ -473,7 +574,7 @@ Return a single markdown blog post, ready to publish.`;
 
       return publishedContent;
     } catch (error) {
-      console.error('Error calling OpenAI API for publishing:', error);
+      console.error('Error calling AI API for publishing:', error);
       throw error;
     }
   }

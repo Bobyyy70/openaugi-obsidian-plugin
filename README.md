@@ -20,9 +20,89 @@ Parent [repo](https://github.com/bitsofchris/openaugi).
 
 1. Install the plugin from the Obsidian Community Plugins or manually
 2. Go to Settings → OpenAugi
-3. Enter your OpenAI API key
+3. **Choose your AI provider:**
+   - **OpenAI**: Enter your OpenAI API key (recommended for best results)
+   - **Ollama**: Use local open-source models (free, private, no API key needed)
+   - **Custom**: Connect to any OpenAI-compatible API endpoint
 4. Set your preferred folders for summaries and atomic notes
 5. Save settings
+
+### Using Open-Source Models with Ollama
+
+OpenAugi now supports running completely local, open-source models through [Ollama](https://ollama.com)! This means:
+- ✅ **No API costs** - Run unlimited processing for free
+- ✅ **Complete privacy** - Your notes never leave your computer
+- ✅ **Offline support** - Works without internet connection
+- ✅ **Multiple model options** - Choose from Llama, Mistral, Qwen, and more
+
+**Quick Start with Ollama:**
+
+1. **Install Ollama** (if not already installed):
+   - Visit [ollama.com](https://ollama.com) and download for your OS
+   - Or use: `curl -fsSL https://ollama.com/install.sh | sh` (Linux/Mac)
+
+2. **Pull a recommended model:**
+   ```bash
+   # Recommended: Llama 3.2 (good balance of speed and quality)
+   ollama pull llama3.2
+
+   # Or try other models:
+   ollama pull mistral       # Fast and efficient
+   ollama pull qwen2.5       # Strong reasoning
+   ollama pull llama3.1:70b  # Best quality (requires more RAM)
+   ```
+
+3. **Configure OpenAugi:**
+   - Open Settings → OpenAugi
+   - Set **Model Provider** to "Ollama (Local)"
+   - Set **Base URL** to `http://localhost:11434` (default, usually auto-detected)
+   - Set **Model Name Override** to your model (e.g., `llama3.2`, `mistral`, `qwen2.5`)
+   - Leave **API Key** empty
+   - Save settings
+
+4. **Start processing!**
+   - Ollama will automatically start when you run a command
+   - First run may be slower as the model loads into memory
+   - Subsequent runs will be faster
+
+**Model Recommendations:**
+- **For most users**: `llama3.2` - Great balance of quality and speed
+- **For faster processing**: `mistral` - Lighter model, still good quality
+- **For best results**: `qwen2.5` or `llama3.1:70b` - Highest quality, needs more RAM
+- **For low-end hardware**: `llama3.2:1b` - Very fast, basic quality
+
+**Troubleshooting Ollama:**
+- Make sure Ollama is running: `ollama serve` (usually starts automatically)
+- Check available models: `ollama list`
+- Test model: `ollama run llama3.2 "Hello"`
+- Default port is 11434, change in settings if using custom configuration
+
+### Using Custom OpenAI-Compatible APIs
+
+You can also connect OpenAugi to other providers that implement the OpenAI API format:
+
+**Supported Services:**
+- LM Studio (local models with GUI)
+- LocalAI (self-hosted)
+- Together AI, Groq, and other cloud providers
+- Any service with OpenAI-compatible `/v1/chat/completions` endpoint
+
+**Configuration:**
+1. Set **Model Provider** to "Custom OpenAI-Compatible API"
+2. Enter your **Base URL** (e.g., `http://localhost:1234/v1` for LM Studio)
+3. Enter **API Key** if required by your service
+4. Set **Model Name Override** to match your service's model name
+5. Save settings
+
+**Example: Using LM Studio**
+1. Download and run [LM Studio](https://lmstudio.ai)
+2. Load a model (e.g., Llama 3.2)
+3. Start the local server (default: `http://localhost:1234`)
+4. In OpenAugi settings:
+   - Provider: "Custom OpenAI-Compatible API"
+   - Base URL: `http://localhost:1234/v1`
+   - Model: Use the exact model name from LM Studio
+   - API Key: Leave empty
 
 ## Main Commands
 
@@ -321,20 +401,46 @@ Take advantage of journal-style note support:
 - Only relevant date sections are processed, keeping context focused
 
 ## Requirements
-Note: this requires an OpenAI API key to work. 
 
-Your content is sent directly to OpenAI for processing using the best model for this task. The cost to use this plugin depends on the API credits consumed. For me ~5 minutes of voice note is about 2-3 cents of processing.
+OpenAugi supports multiple AI providers with different requirements:
+
+### OpenAI (Cloud)
+- **Requires**: OpenAI API key
+- **Cost**: Pay per use (~2-3 cents per 5 minutes of voice notes)
+- **Privacy**: Content sent to OpenAI servers
+- **Quality**: Highest quality results with GPT-5 models
+
+### Ollama (Local)
+- **Requires**: Ollama installed locally (free)
+- **Cost**: Free - runs on your hardware
+- **Privacy**: 100% local - content never leaves your computer
+- **Quality**: Good to excellent depending on model choice
+- **Hardware**: Minimum 8GB RAM recommended, 16GB+ for larger models
+
+### Custom API (Self-Hosted or Third-Party)
+- **Requires**: Access to an OpenAI-compatible API endpoint
+- **Cost**: Varies by provider
+- **Privacy**: Depends on your chosen provider
+- **Quality**: Varies by model and provider
 
 ## Configuration Settings
 
 OpenAugi provides several configuration options in Settings → OpenAugi:
 
-### Basic Settings
-- **OpenAI API Key**: Your API key for processing (required)
+### AI Model Settings
+- **Model Provider**: Choose between OpenAI, Ollama (local), or Custom API
+- **API Key**: Required for OpenAI and some custom providers (not needed for local Ollama)
+- **Base URL**: API endpoint for Ollama or custom providers (default: `http://localhost:11434` for Ollama)
+- **OpenAI Model**: Select GPT-5, GPT-5 Mini, or GPT-5 Nano (OpenAI only)
+- **Model Name Override**: Specify exact model name (e.g., `llama3.2` for Ollama, custom model names for other providers)
+
+### Folder Settings
 - **Summaries Folder**: Where summary files are saved (default: `OpenAugi/Summaries`)
 - **Notes Folder**: Where atomic notes are saved (default: `OpenAugi/Notes`)
 - **Prompts Folder**: Where custom prompt templates are stored (default: `OpenAugi/Prompts`)
 - **Published Folder**: Where published blog posts are saved (default: `OpenAugi/Published`)
+
+### Integration Settings
 - **Use Dataview**: Enable processing of dataview queries in distillation
 
 ### Context Gathering Settings
