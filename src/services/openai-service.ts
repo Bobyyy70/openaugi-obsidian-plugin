@@ -265,6 +265,9 @@ export class OpenAIService {
       }
 
       const responseData = await response.json();
+      if (!responseData.choices || !Array.isArray(responseData.choices) || responseData.choices.length === 0) {
+        throw new Error('Invalid API response: no choices returned');
+      }
       const structuredData = responseData.choices[0].message.content;
 
       // Check for API refusal (OpenAI specific)
