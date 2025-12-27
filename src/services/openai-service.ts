@@ -77,6 +77,7 @@ export class OpenAIService {
       !responseData ||
       !Array.isArray(responseData.choices) ||
       responseData.choices.length === 0 ||
+      !responseData.choices[0] ||
       !responseData.choices[0].message ||
       typeof responseData.choices[0].message.content === 'undefined'
     ) {
