@@ -13,8 +13,12 @@ export interface ContextGatheringDefaults {
   filterRecentSectionsOnly: boolean;
 }
 
+export type ModelProvider = 'openai' | 'ollama' | 'custom';
+
 export interface OpenAugiSettings {
   apiKey: string;
+  modelProvider: ModelProvider;
+  customBaseUrl: string;
   defaultModel: string;
   customModelOverride: string;
   summaryFolder: string;
@@ -29,6 +33,8 @@ export interface OpenAugiSettings {
 
 export const DEFAULT_SETTINGS: OpenAugiSettings = {
   apiKey: '',
+  modelProvider: 'openai',
+  customBaseUrl: '',
   defaultModel: 'gpt-5',
   customModelOverride: '',
   summaryFolder: 'OpenAugi/Summaries',

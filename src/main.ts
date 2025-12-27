@@ -120,14 +120,29 @@ export default class OpenAugiPlugin extends Plugin {
    * Get the configured model (custom override or default)
    */
   private getConfiguredModel(): string {
-    return this.settings.customModelOverride.trim() || this.settings.defaultModel;
+    const override = this.settings.customModelOverride?.trim();
+    if (override) {
+      return override;
+    }
+
+    // Default models based on provider
+    if (this.settings.modelProvider === 'ollama') {
+      return 'llama3.2';
+    }
+
+    return this.settings.defaultModel || 'gpt-5';
   }
 
   /**
    * Initialize services with current settings
    */
   private initializeServices(): void {
-    this.openAIService = new OpenAIService(this.settings.apiKey, this.getConfiguredModel());
+    this.openAIService = new OpenAIService(
+      this.settings.apiKey,
+      this.getConfiguredModel(),
+      this.settings.modelProvider,
+      this.settings.customBaseUrl
+    );
     this.fileService = new FileService(
       this.app,
       this.settings.summaryFolder,
@@ -173,18 +188,23 @@ export default class OpenAugiPlugin extends Plugin {
       // Read file content
       const content = await this.app.vault.read(file);
       
-      // Check if API key is set
-      if (!this.settings.apiKey) {
+      // Check if API key is set (only required for non-local providers)
+      if (this.settings.modelProvider !== 'ollama' && !this.settings.apiKey) {
         this.loadingIndicator?.hide();
-        new Notice('Please set your OpenAI API key in the plugin settings');
+        new Notice('Please set your API key in the plugin settings');
         return;
       }
 
       // Display character and token count
       new Notice(`Processing transcript: ${file.basename}\nCharacters: ${content.length}\nEst. Tokens: ${estimateTokens(content)}`);
 
-      // Update openAIService with latest API key and model
-      this.openAIService = new OpenAIService(this.settings.apiKey, this.getConfiguredModel());
+      // Update openAIService with latest settings
+      this.openAIService = new OpenAIService(
+        this.settings.apiKey,
+        this.getConfiguredModel(),
+        this.settings.modelProvider,
+        this.settings.customBaseUrl
+      );
       
       // Parse transcript
       const parsedData = await this.openAIService.parseTranscript(content);
@@ -237,15 +257,20 @@ export default class OpenAugiPlugin extends Plugin {
       // Show loading indicator
       this.loadingIndicator?.show('Distilling linked notes');
       
-      // Check if API key is set
-      if (!this.settings.apiKey) {
+      // Check if API key is set (only required for non-local providers)
+      if (this.settings.modelProvider !== 'ollama' && !this.settings.apiKey) {
         this.loadingIndicator?.hide();
-        new Notice('Please set your OpenAI API key in the plugin settings');
+        new Notice('Please set your API key in the plugin settings');
         return;
       }
 
-      // Update services with latest API key and model
-      this.openAIService = new OpenAIService(this.settings.apiKey, this.getConfiguredModel());
+      // Update services with latest settings
+      this.openAIService = new OpenAIService(
+        this.settings.apiKey,
+        this.getConfiguredModel(),
+        this.settings.modelProvider,
+        this.settings.customBaseUrl
+      );
       this.distillService = new DistillService(
         this.app, 
         this.openAIService,
@@ -534,9 +559,9 @@ export default class OpenAugiPlugin extends Plugin {
     options: CommandOptions
   ): Promise<void> {
     try {
-      // Check API key
-      if (!this.settings.apiKey) {
-        new Notice('Please set your OpenAI API key in the settings');
+      // Check API key (only required for non-local providers)
+      if (this.settings.modelProvider !== 'ollama' && !this.settings.apiKey) {
+        new Notice('Please set your API key in the settings');
         return;
       }
 
@@ -577,8 +602,13 @@ export default class OpenAugiPlugin extends Plugin {
     try {
       this.loadingIndicator?.show('Distilling content...');
 
-      // Update services with latest API key and model
-      this.openAIService = new OpenAIService(this.settings.apiKey, this.getConfiguredModel());
+      // Update services with latest settings
+      this.openAIService = new OpenAIService(
+        this.settings.apiKey,
+        this.getConfiguredModel(),
+        this.settings.modelProvider,
+        this.settings.customBaseUrl
+      );
       this.distillService = new DistillService(
         this.app,
         this.openAIService,
@@ -624,8 +654,13 @@ export default class OpenAugiPlugin extends Plugin {
     try {
       this.loadingIndicator?.show('Publishing content...');
 
-      // Update services with latest API key and model
-      this.openAIService = new OpenAIService(this.settings.apiKey, this.getConfiguredModel());
+      // Update services with latest settings
+      this.openAIService = new OpenAIService(
+        this.settings.apiKey,
+        this.getConfiguredModel(),
+        this.settings.modelProvider,
+        this.settings.customBaseUrl
+      );
 
       // Call publish API
       const publishedContent = await this.openAIService.publishContent(

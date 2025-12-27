@@ -14,11 +14,34 @@ export class OpenAugiSettingTab extends PluginSettingTab {
 
     containerEl.empty();
 
+    // AI Model Settings Header
+    containerEl.createEl('h3', { text: 'AI Model Settings' });
+
     new Setting(containerEl)
-      .setName('OpenAI API key')
-      .setDesc('Your OpenAI API key')
+      .setName('Model Provider')
+      .setDesc('Choose your AI model provider')
+      .addDropdown(dropdown => dropdown
+        .addOption('openai', 'OpenAI')
+        .addOption('ollama', 'Ollama (Local)')
+        .addOption('custom', 'Custom OpenAI-Compatible API')
+        .setValue(this.plugin.settings.modelProvider)
+        .onChange(async (value: 'openai' | 'ollama' | 'custom') => {
+          this.plugin.settings.modelProvider = value;
+          await this.plugin.saveSettings();
+          // Refresh the settings display to show/hide relevant fields
+          this.display();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName('API Key')
+      .setDesc(this.plugin.settings.modelProvider === 'ollama'
+        ? 'Not required for local Ollama installations'
+        : this.plugin.settings.modelProvider === 'openai'
+        ? 'Your OpenAI API key'
+        : 'API key for your custom endpoint (if required)')
       .addText(text => text
-        .setPlaceholder('sk-...')
+        .setPlaceholder(this.plugin.settings.modelProvider === 'ollama' ? 'Leave empty for local Ollama' : 'sk-...')
         .setValue(this.plugin.settings.apiKey)
         .inputEl.type = 'password'
       )
@@ -35,31 +58,64 @@ export class OpenAugiSettingTab extends PluginSettingTab {
         })
       );
 
-    new Setting(containerEl)
-      .setName('OpenAI Model')
-      .setDesc('Select the OpenAI model to use for processing')
-      .addDropdown(dropdown => dropdown
-        .addOption('gpt-5', 'GPT-5')
-        .addOption('gpt-5-mini', 'GPT-5 Mini')
-        .addOption('gpt-5-nano', 'GPT-5 Nano')
-        .setValue(this.plugin.settings.defaultModel)
-        .onChange(async (value) => {
-          this.plugin.settings.defaultModel = value;
-          await this.plugin.saveSettings();
-        })
-      );
+    // Show base URL field for Ollama and Custom providers
+    if (this.plugin.settings.modelProvider === 'ollama' || this.plugin.settings.modelProvider === 'custom') {
+      new Setting(containerEl)
+        .setName('Base URL')
+        .setDesc(this.plugin.settings.modelProvider === 'ollama'
+          ? 'Ollama API endpoint (default: http://localhost:11434)'
+          : 'Custom API base URL (e.g., http://localhost:1234/v1)')
+        .addText(text => text
+          .setPlaceholder(this.plugin.settings.modelProvider === 'ollama'
+            ? 'http://localhost:11434'
+            : 'http://localhost:1234/v1')
+          .setValue(this.plugin.settings.customBaseUrl)
+          .onChange(async (value) => {
+            this.plugin.settings.customBaseUrl = value;
+            await this.plugin.saveSettings();
+          })
+        );
+    }
+
+    // Model selection - different options based on provider
+    if (this.plugin.settings.modelProvider === 'openai') {
+      new Setting(containerEl)
+        .setName('OpenAI Model')
+        .setDesc('Select the OpenAI model to use for processing')
+        .addDropdown(dropdown => dropdown
+          .addOption('gpt-5', 'GPT-5')
+          .addOption('gpt-5-mini', 'GPT-5 Mini')
+          .addOption('gpt-5-nano', 'GPT-5 Nano')
+          .setValue(this.plugin.settings.defaultModel)
+          .onChange(async (value) => {
+            this.plugin.settings.defaultModel = value;
+            await this.plugin.saveSettings();
+          })
+        );
+    }
 
     new Setting(containerEl)
-      .setName('Custom Model Override (Optional)')
-      .setDesc('Specify any OpenAI model name to override the selection above. Leave empty to use the selected model.')
+      .setName('Model Name Override (Optional)')
+      .setDesc(this.plugin.settings.modelProvider === 'ollama'
+        ? 'Specify the Ollama model name (e.g., llama3.2, mistral, qwen2.5). Leave empty to use llama3.2'
+        : this.plugin.settings.modelProvider === 'custom'
+        ? 'Specify the model name for your custom endpoint'
+        : 'Specify any OpenAI model name to override the selection above')
       .addText(text => text
-        .setPlaceholder('e.g., gpt-4o-2024-11-20')
+        .setPlaceholder(this.plugin.settings.modelProvider === 'ollama'
+          ? 'e.g., llama3.2, mistral, qwen2.5'
+          : this.plugin.settings.modelProvider === 'custom'
+          ? 'e.g., your-model-name'
+          : 'e.g., gpt-4o-2024-11-20')
         .setValue(this.plugin.settings.customModelOverride)
         .onChange(async (value) => {
           this.plugin.settings.customModelOverride = value;
           await this.plugin.saveSettings();
         })
       );
+
+    // Folder Settings Header
+    containerEl.createEl('h3', { text: 'Folder Settings' });
     
     new Setting(containerEl)
       .setName('Summaries folder')
