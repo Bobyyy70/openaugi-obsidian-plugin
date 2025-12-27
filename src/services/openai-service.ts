@@ -2,7 +2,7 @@ import { TranscriptResponse, DistillResponse, PublishResponse } from '../types/t
 import { ModelProvider } from '../types/settings';
 
 /**
- * A simple tokeinzer to estimate the number of tokens
+ * A simple tokenizer to estimate the number of tokens
  * @param text Text to count tokens from
  * @returns Approximate token count
  */
