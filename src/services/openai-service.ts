@@ -31,21 +31,29 @@ export class OpenAIService {
    * Get the appropriate base URL based on the provider
    */
   private getBaseUrl(provider: ModelProvider, customBaseUrl?: string): string {
-    if (customBaseUrl && customBaseUrl.trim()) {
-      // Remove trailing slash if present
-      return customBaseUrl.trim().replace(/\/$/, '');
-    }
-
+    // Get the default base URL for the provider
+    let baseUrl: string;
     switch (provider) {
       case 'openai':
-        return 'https://api.openai.com/v1';
+        baseUrl = 'https://api.openai.com/v1';
+        break;
       case 'ollama':
-        return 'http://localhost:11434';
+        baseUrl = 'http://localhost:11434';
+        break;
       case 'custom':
-        return customBaseUrl || 'http://localhost:1234/v1';
+        baseUrl = 'http://localhost:1234/v1';
+        break;
       default:
-        return 'https://api.openai.com/v1';
+        baseUrl = 'https://api.openai.com/v1';
     }
+
+    // Allow customBaseUrl to override the default if provided and non-empty
+    if (customBaseUrl && customBaseUrl.trim()) {
+      baseUrl = customBaseUrl.trim();
+    }
+
+    // Remove trailing slash if present
+    return baseUrl.replace(/\/$/, '');
   }
 
   /**
