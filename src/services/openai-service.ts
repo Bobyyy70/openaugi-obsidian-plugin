@@ -67,6 +67,31 @@ export class OpenAIService {
   }
 
   /**
+   * Validate API response format and extract message content
+   * @param responseData The response data from the API
+   * @returns The message content
+   * @throws Error if the response format is invalid
+   */
+  private validateAndExtractContent(responseData: any): string {
+    if (
+      !responseData ||
+      !Array.isArray(responseData.choices) ||
+      responseData.choices.length === 0 ||
+      !responseData.choices[0].message ||
+      typeof responseData.choices[0].message.content === 'undefined'
+    ) {
+      throw new Error('API response format error: missing choices/message/content');
+    }
+
+    // Check for API refusal (OpenAI specific)
+    if (responseData.choices[0].message.refusal) {
+      throw new Error(`API refusal: ${responseData.choices[0].message.refusal}`);
+    }
+
+    return responseData.choices[0].message.content;
+  }
+
+  /**
    * Extract custom context instructions from content if they exist
    * @param content The content to extract the context from
    * @returns The extracted context or null if none exists
@@ -273,21 +298,7 @@ export class OpenAIService {
       }
 
       const responseData = await response.json();
-      if (
-        !responseData ||
-        !Array.isArray(responseData.choices) ||
-        responseData.choices.length === 0 ||
-        !responseData.choices[0].message ||
-        typeof responseData.choices[0].message.content === 'undefined'
-      ) {
-        throw new Error('API response format error: missing choices/message/content');
-      }
-      const structuredData = responseData.choices[0].message.content;
-
-      // Check for API refusal (OpenAI specific)
-      if (responseData.choices[0].message.refusal) {
-        throw new Error(`API refusal: ${responseData.choices[0].message.refusal}`);
-      }
+      const structuredData = this.validateAndExtractContent(responseData);
 
       // Parse the JSON
       const parsedData: TranscriptResponse = typeof structuredData === 'string'
@@ -452,21 +463,7 @@ export class OpenAIService {
       }
 
       const responseData = await response.json();
-      if (
-        !responseData ||
-        !Array.isArray(responseData.choices) ||
-        responseData.choices.length === 0 ||
-        !responseData.choices[0].message ||
-        typeof responseData.choices[0].message.content === 'undefined'
-      ) {
-        throw new Error('API response format error: missing choices/message/content');
-      }
-      const structuredData = responseData.choices[0].message.content;
-
-      // Check for API refusal (OpenAI specific)
-      if (responseData.choices[0].message.refusal) {
-        throw new Error(`API refusal: ${responseData.choices[0].message.refusal}`);
-      }
+      const structuredData = this.validateAndExtractContent(responseData);
 
       // Parse the JSON
       const parsedData: DistillResponse = typeof structuredData === 'string'
@@ -589,23 +586,7 @@ Return a single markdown blog post, ready to publish.`;
       }
 
       const responseData = await response.json();
-      if (
-        !responseData ||
-        !Array.isArray(responseData.choices) ||
-        responseData.choices.length === 0 ||
-        !responseData.choices[0].message ||
-        typeof responseData.choices[0].message.content === 'undefined'
-      ) {
-        throw new Error('API response format error: missing choices/message/content');
-      }
-
-      // Check for API refusal (OpenAI specific)
-      if (responseData.choices[0].message.refusal) {
-        throw new Error(`API refusal: ${responseData.choices[0].message.refusal}`);
-      }
-
-      // Get the plain text content
-      const publishedContent = responseData.choices[0].message.content;
+      const publishedContent = this.validateAndExtractContent(responseData);
 
       return publishedContent;
     } catch (error) {
