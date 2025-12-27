@@ -30,32 +30,38 @@ export class OpenAIService {
   /**
    * Get the appropriate base URL based on the provider
    */
+  /**
+   * Returns the base URL for the API, always WITHOUT the /v1 segment.
+   * If a custom base URL is provided, strips any trailing slash and /v1.
+   */
   private getBaseUrl(provider: ModelProvider, customBaseUrl?: string): string {
     if (customBaseUrl && customBaseUrl.trim()) {
-      // Remove trailing slash if present
-      return customBaseUrl.trim().replace(/\/$/, '');
+      // Remove trailing slash and trailing /v1 if present
+      return customBaseUrl.trim()
+        .replace(/\/+$/, '')         // Remove trailing slashes
+        .replace(/\/v1$/, '');       // Remove trailing /v1
     }
 
     switch (provider) {
       case 'openai':
-        return 'https://api.openai.com/v1';
+        return 'https://api.openai.com';
       case 'ollama':
         return 'http://localhost:11434';
       case 'custom':
-        return customBaseUrl || 'http://localhost:1234/v1';
+        return 'http://localhost:1234';
       default:
-        return 'https://api.openai.com/v1';
+        return 'https://api.openai.com';
     }
   }
 
   /**
    * Get the chat completions endpoint based on the provider
    */
+  /**
+   * Returns the chat completions endpoint, always appending /v1/chat/completions to the base URL.
+   */
   private getChatCompletionsEndpoint(): string {
-    if (this.provider === 'ollama') {
-      return `${this.baseUrl}/v1/chat/completions`;
-    }
-    return `${this.baseUrl}/chat/completions`;
+    return `${this.baseUrl}/v1/chat/completions`;
   }
 
   /**
