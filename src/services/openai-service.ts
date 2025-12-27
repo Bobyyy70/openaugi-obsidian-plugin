@@ -435,6 +435,15 @@ export class OpenAIService {
       }
 
       const responseData = await response.json();
+      if (
+        !responseData ||
+        !Array.isArray(responseData.choices) ||
+        responseData.choices.length === 0 ||
+        !responseData.choices[0].message ||
+        typeof responseData.choices[0].message.content === 'undefined'
+      ) {
+        throw new Error('API response format error: missing choices/message/content');
+      }
       const structuredData = responseData.choices[0].message.content;
 
       // Check for API refusal (OpenAI specific)
