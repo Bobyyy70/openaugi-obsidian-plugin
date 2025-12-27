@@ -2,6 +2,54 @@ import { TranscriptResponse, DistillResponse, PublishResponse } from '../types/t
 import { ModelProvider } from '../types/settings';
 
 /**
+ * Type definitions for OpenAI-compatible API requests
+ */
+
+/** Message in chat completion format */
+interface ChatMessage {
+  role: string;
+  content: string;
+}
+
+/** JSON schema format for structured output (OpenAI specific) */
+interface JsonSchemaFormat {
+  type: "json_schema";
+  json_schema: {
+    name: string;
+    schema: {
+      type: string;
+      properties: Record<string, unknown>;
+      required: string[];
+      additionalProperties: boolean;
+    };
+    strict: boolean;
+  };
+}
+
+/** JSON object format for non-structured output */
+interface JsonObjectFormat {
+  type: "json_object";
+}
+
+/** Union type for response format */
+type ResponseFormat = JsonSchemaFormat | JsonObjectFormat;
+
+/** Base chat completion request body */
+interface BaseChatCompletionRequest {
+  model: string;
+  messages: ChatMessage[];
+  response_format?: ResponseFormat;
+}
+
+/** OpenAI-specific request with max_completion_tokens */
+interface OpenAIChatCompletionRequest extends BaseChatCompletionRequest {
+  max_completion_tokens?: number;
+}
+
+/** Generic chat completion request (for Ollama and other providers) */
+type ChatCompletionRequest = OpenAIChatCompletionRequest;
+
+/**
  * A simple tokeinzer to estimate the number of tokens
  * @param text Text to count tokens from
  * @returns Approximate token count
@@ -187,7 +235,7 @@ export class OpenAIService {
     const endpoint = this.getChatCompletionsEndpoint();
 
     try {
-      const requestBody: any = {
+      const requestBody: ChatCompletionRequest = {
         model: this.model,
         messages: [{ role: 'user', content: prompt }]
       };
@@ -357,7 +405,7 @@ export class OpenAIService {
     const endpoint = this.getChatCompletionsEndpoint();
 
     try {
-      const requestBody: any = {
+      const requestBody: ChatCompletionRequest = {
         model: this.model,
         messages: [{ role: 'user', content: prompt }]
       };
@@ -541,7 +589,7 @@ Return a single markdown blog post, ready to publish.`;
     const endpoint = this.getChatCompletionsEndpoint();
 
     try {
-      const requestBody: any = {
+      const requestBody: ChatCompletionRequest = {
         model: this.model,
         messages: [{ role: 'user', content: prompt }]
       };
